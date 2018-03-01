@@ -122,8 +122,11 @@ class Inotify(object):
 
         if superficial is False:
             _LOGGER.debug("Removing watch for watch-handle (%d).", wd)
-
-            inotify.calls.inotify_rm_watch(self.__inotify_fd, wd)
+            
+            try:
+                inotify.calls.inotify_rm_watch(self.__inotify_fd, wd)
+            except inotify.calls.InotifyError:
+                pass
 
     def _get_event_names(self, event_type):
         names = []
