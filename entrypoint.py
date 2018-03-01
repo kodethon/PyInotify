@@ -23,8 +23,9 @@ def _main():
         print "\n{} -> {}".format(type_names, path)
         
         event = type_names[0]
+        is_dir = len(type_names) > 1 and type_names[1] == 'IN_ISDIR'
         if event == 'IN_DELETE_SELF' or event == 'IN_DELETE' or event == 'IN_MOVED_FROM':
-            delete_args = ['zip', '-d', zip_path, path + '/']
+            delete_args = ['zip', '-d', zip_path, path + '/' if is_dir else path]
             print delete_args
             process = subprocess.Popen(delete_args)
             
