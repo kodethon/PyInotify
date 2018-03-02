@@ -19,7 +19,26 @@ def _main():
         process = subprocess.Popen(['zip', zip_path, '.', '-i', '.'])
     
     deferred_updates = {}
+    #timestamp = time.time()
+    #backlog = 0
     for event in i.event_gen(yield_nones=False):
+        '''
+        t = time.time()
+
+        if backlog > 0:
+            if time.time() - timestamp > 5:
+                print 'Syncing zip...'
+                sync_zip(zip_path)
+                backlog = 0
+                timestamp = t
+            continue 
+        elif t - timestamp < 0.5:
+            print 'Batching events...'
+            backlog += 1
+            timestamp = t
+            continue
+        '''
+
         (_, type_names, dir_path, filename) = event
         path = os.path.join(dir_path, filename)
         print "\n{} -> {}".format(type_names, path)
@@ -35,9 +54,7 @@ def _main():
 
         if event == 'IN_DELETE_SELF' or event == 'IN_DELETE' or event == 'IN_MOVED_FROM':
             # If delete operation
-            delete_args = ['zip', '-d', zip_path, path + '/' if is_dir else path]
-            print delete_args
-            process = subprocess.Popen(delete_args)
+            delete_zip(path, is_dir, zip_path) 
             
             # Fix crashing issue...
             if event == 'IN_DELETE_SELF':
@@ -76,10 +93,22 @@ def process_deferred_updates(deferred_updates, zip_path):
     for path in processed_paths:
         deferred_updates.pop(path)
 
+def sync_zip(zip_path):
+    update_args = ['zip', '--symlink', 'FSr', zip_path, '.']
+    print update_args
+    process = subprocess.Popen(update_args)
+
 def update_zip(path, zip_path):
     update_args = ['zip', '--symlink', zip_path, path]
     print update_args
     process = subprocess.Popen(update_args)
+
+def delete_zip(path, is_dir, zip_path):
+    path = path + '/' if is_dir else path
+    delete_args = ['zip', '-d', zip_path, path]
+    print delete_args
+    process = subprocess.Popen(delete_args)
+    time.sleep(0.025)
 
 if __name__ == '__main__':
     _main()
