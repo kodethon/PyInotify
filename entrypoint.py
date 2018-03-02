@@ -25,7 +25,14 @@ def _main():
         print "\n{} -> {}".format(type_names, path)
         
         event = type_names[0]
-        is_dir = len(type_names) > 1 and type_names[1] == 'IN_ISDIR'
+        if event == 'IN_IGNORED':
+            continue
+        
+        is_dir = False
+        if event == 'IN_ISDIR':
+            event = type_names[1]
+            is_dir = True
+
         if event == 'IN_DELETE_SELF' or event == 'IN_DELETE' or event == 'IN_MOVED_FROM':
             # If delete operation
             delete_args = ['zip', '-d', zip_path, path + '/' if is_dir else path]
