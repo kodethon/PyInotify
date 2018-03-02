@@ -8,7 +8,10 @@ rm -rf $test_dir/*
 sudo rm $host_zip_path
 
 docker rm -f $test_container_name
-docker run --name $test_container_name -d -v $(pwd)/$test_dir:/home/kodethon -v $(pwd)/tmp:/tmp jvlythical/fs:py $container_zip_path
+docker run --name $test_container_name -itd \
+-v $(pwd)/../..:/sbin/PyInotify \
+-v $(pwd)/$test_dir:/home/kodethon -v $(pwd)/tmp:/tmp jvlythical/fs:py \
+$container_zip_path
 
 sleep 5 # Wait for initialization
-python test.py $test_dir $host_zip_path 10
+python test.py $test_dir $host_zip_path 100
