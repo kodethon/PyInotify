@@ -12,53 +12,84 @@ class Tester:
     def __init__(self, test_dir, zip_path):
         self.test_dir = test_dir
         self.zip_path = zip_path
-        self.update_list = []
-        self.delete_list = []
+        self.update_table = {}
+        self.delete_table = {}
         self.dir_list = [test_dir]
         self.file_list = []
+        self.total_tests = 0
+        self.passed_tests = 0
+
+    def is_finished(self):
+        return self.passed_tests == self.total_tests
 
     def to_container_path(self, path):
         return path.replace(self.test_dir + '/', '', 1)
 
-    def check_file_created(self, path, is_dir, iteration = 0):
+    def apply_check(self):
+        updated_paths = []
+        for path in self.update_table:
+            updated_path = self.check_file_created(path, self.update_table[path]['is_dir'])
+            if updated_path:
+                updated_paths.append(updated_path)
+        
+        for path in updated_paths:
+            self.update_table.pop(path)
+        
+        self.passed_tests += len(updated_paths)
+
+        deleted_paths = []
+        for path in self.delete_table:
+            deleted_path = self.check_file_deleted(path, self.delete_table[path]['is_dir'])
+            if deleted_path:
+                deleted_paths.append(deleted_path)
+        
+        for path in deleted_paths:
+            self.delete_table.pop(path)
+
+        self.passed_tests += len(deleted_paths)
+        print "Passed: %s - Pending: %s" % (self.passed_tests, self.total_tests - self.passed_tests)
+
+    def check_file_created(self, path, is_dir):
         ''' Check file exists in zip file '''
         container_file_path = self.to_container_path(path)
-        time.sleep(iteration + 1)
         zf = zipfile.ZipFile(self.zip_path, 'r')
         paths_in_zip = zf.namelist()
         try:
             found = paths_in_zip.index(container_file_path if not is_dir else container_file_path + '/')
-            print "Test succeeded after iteration %s" % iteration
+            print "%s exists after %s event(s)." % (path, self.update_table[path]['timestamp']) 
+            return path
         except ValueError:
-            self.check_file_created(container_file_path, is_dir, iteration + 1)
+            self.update_table[path]['timestamp'] += 1
+            print "%s is missing for %s event(s)." % (path, self.update_table[path]['timestamp']) 
 
-    def check_file_deleted(self, path, is_dir, iteration = 0):
+    def check_file_deleted(self, path, is_dir):
         ''' Check file does not exist in zip file '''
         container_file_path = self.to_container_path(path)
-        time.sleep(iteration + 1)
         zf = zipfile.ZipFile(self.zip_path, 'r')
         paths_in_zip = zf.namelist()
         try:
             found = paths_in_zip.index(container_file_path if not is_dir else container_file_path + '/')
-            self.check_file_deleted(container_file_path, is_dir, iteration + 1)
+            self.delete_table[path]['timestamp'] += 1
+            print "%s has existed for %s event(s)." % (path, self.delete_table[path]['timestamp']) 
         except ValueError:
-            print "Test succeeded after iteration %s" % iteration
+            print "%s has been deleted after %s event(s)." % (path, self.delete_table[path]['timestamp'])
+            return path
 
-    def check_file_updated(self, path, text, iteration = 0):
+    def check_file_updated(self, path, text):
         ''' Check file in zip exists and its contents match text '''
         container_file_path = self.to_container_path(path)
-        time.sleep(iteration + 1)
         zf = zipfile.ZipFile(self.zip_path, 'r')
         try:
             data = zf.read(container_file_path)
+            if data == text:
+                print "%s contents updated after %s event(s)." % (path, self.update_table(path)['timestamp'])
+                return path
+            else:
+                self.update_table[path]['timestamp'] += 1
+                print "Zip data has length: %s while expected length is: %s" % (len(data), len(text))
         except KeyError:
-            return self.check_file_updated(container_file_path, text, iteration + 1)
-
-        if data == text:
-            print "Test succeeded after iteration %s" % iteration
-        else:
-            print "Zip data has length: %s while expected length is: %s" % (len(data), len(text))
-            return self.check_file_updated(container_file_path, text, iteration + 1)
+            self.update_table[path]['timestamp'] += 1
+            print "%s is missing for %s event(s)." % (path, self.update_table[path]['timestamp']) 
 
     def pick_random_file(self, file_list):
         if len(file_list) == 0:
@@ -70,6 +101,28 @@ class Tester:
         f = file_list[index]
         file_list.pop(index)
         return f
+    
+    def watch_update(self, path, is_dir):
+        print "Watching %s for update..." % path
+        self.update_table[path] = {
+            'timestamp' : 0,
+            'is_dir' : is_dir
+        }
+        self.total_tests += 1
+        if path in self.delete_table:
+            self.delete_table.pop(path)
+            self.total_tests -= 1
+
+    def watch_delete(self, path, is_dir):
+        print "Watching %s for deletion..." % path
+        self.delete_table[path] = {
+            'timestamp' : 0,
+            'is_dir' : is_dir
+        }
+        self.total_tests += 1
+        if path in self.update_table:
+            self.update_table.pop(path)
+            self.total_tests -= 1
 
     def create_test_case(self):
         char_set = string.ascii_lowercase + string.digits + '_-'
@@ -91,8 +144,8 @@ class Tester:
             print 'Creating file: %s' % path
             fp = open(path, 'a')
             self.file_list.append(path)
-
-        self.check_file_created(path, is_dir) 
+        
+        self.watch_update(path, is_dir) 
 
     def modify_test_case(self):
         char_set = string.ascii_lowercase + string.digits + '_-'
@@ -134,15 +187,14 @@ class Tester:
                 batch = ''
             text += char
         fp.close()
-
-        self.check_file_updated(path, text)
-
+        self.watch_update(path, False)
+        
     def delete_test_case(self):
         is_dir = randint(0, 1) == 0
         if is_dir:
             path = self.pop_random_file(self.dir_list)
             if path == self.test_dir:
-                print 'Root folder selected, continuing...'
+                print 'Root folder selected, continuing...\n'
                 self.dir_list.append(path)
             else:
                 print 'Deleting folder: %s' % path
@@ -154,25 +206,25 @@ class Tester:
                     for name in dirs:
                         marked_dirs.append(os.path.join(root, name))
                 shutil.rmtree(path)
-                self.check_file_deleted(path, is_dir)
                 
                 # Checked that children are also removed
                 for path in marked_files:
-                    print 'Checking if file %s is deleted...' % path
-                    self.check_file_deleted(path, is_dir)
+                    self.watch_delete(path, False)
                     self.file_list.remove(path)
+
                 for path in marked_dirs:
-                    print 'Checking if folder %s is deleted...' % path
-                    self.check_file_deleted(path, is_dir)
+                    self.watch_delete(path, True)
                     self.dir_list.remove(path)
+
+                self.watch_delete(path, is_dir)
         else:
             if len(self.file_list) == 0:
                 print 'No files to delete, continuing...'
             else:
-                path = self.pop_random_file()
+                path = self.pop_random_file(self.file_list)
                 print 'Deleting file: %s' % path
                 os.remove(path)
-                self.check_file_deleted(path, is_dir)
+                self.watch_delete(path, is_dir)
 
 def main():
     if len(sys.argv) < 4:
@@ -196,7 +248,14 @@ def main():
         elif event == 'IN_DELETE':
             tester.delete_test_case()
         elif event == 'IN_MODIFY':       
-            tester.modify_test_case() 
-        
+            tester.modify_test_case()
+
+        time.sleep(1)
+        tester.apply_check()
+    
+    while not tester.is_finished():
+        tester.apply_check()
+        time.sleep(1)
+
 if __name__ == '__main__':
     main()

@@ -31,9 +31,6 @@ def _main():
         if event == 'IN_IGNORED':
             continue
 
-        print update_backlog
-        print delete_backlog
-        
         is_dir = False
         if event == 'IN_ISDIR':
             event = type_names[1]
@@ -41,7 +38,9 @@ def _main():
 
         if event == 'IN_DELETE_SELF' or event == 'IN_DELETE' or event == 'IN_MOVED_FROM':
             # If delete operation
-            delete_backlog[path] = timestamp
+            delete_backlog[path] = {
+                'is_dir' : is_dir
+            }
 
             # If most recent operation was deleting a file, don't bother updating
             if path in update_backlog:
@@ -51,7 +50,9 @@ def _main():
             #if event == 'IN_DELETE_SELF':
             #    i.inotify.remove_watch(path)
         else:
-            update_backlog[path] = timestamp
+            update_backlog[path] = {
+                'is_dir' : is_dir
+            }
 
             # If most recent operation was updating a file, don't bother deleting
             if path in delete_backlog:
@@ -61,20 +62,17 @@ def _main():
             print '\nProcessing backlog...'
             process_deferred_updates(update_backlog, delete_backlog, zip_path)
             checkpoint = timestamp
+            print ''
 
 def process_deferred_updates(update_backlog, delete_backlog, zip_path):
-    processed_paths = []
-
     for path in update_backlog:
         update_zip(path, zip_path) 
-        processed_paths.append(path)
 
     for path in delete_backlog:
-        delete_zip(path, zip_path) 
-        processed_paths.append(path)
+        delete_zip(path, delete_backlog[path]['is_dir'], zip_path) 
 
-    update_backlog = {}
-    delete_backlog = {}
+    update_backlog.clear()
+    delete_backlog.clear()
 
 def sync_zip(zip_path):
     update_args = ['zip', '--symlink', 'FSr', zip_path, '.']
@@ -84,14 +82,23 @@ def sync_zip(zip_path):
 def update_zip(path, zip_path):
     update_args = ['zip', '--symlink', zip_path, path]
     print update_args
-    process = subprocess.Popen(update_args)
+    child = subprocess.Popen(update_args)
+    child.communicate()[0]
+    returncode = child.returncode
+    if returncode != 0 and returncode != 12:
+        print returncode
+        sys.exit()
 
 def delete_zip(path, is_dir, zip_path):
     path = path + '/' if is_dir else path
     delete_args = ['zip', '-d', zip_path, path]
     print delete_args
-    process = subprocess.Popen(delete_args)
-    time.sleep(0.025)
+    child = subprocess.Popen(delete_args)
+    child.communicate()[0]
+    returncode = child.returncode
+    if returncode != 0 and returncode != 12:
+        print returncode
+        sys.exit()
 
 if __name__ == '__main__':
     _main()
