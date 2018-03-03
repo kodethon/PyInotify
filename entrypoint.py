@@ -27,16 +27,11 @@ def _main():
         path = os.path.join(dir_path, filename)
         print "{} -> {}".format(type_names, path)
         
-        event = type_names[0]
+        event, is_dir = parse_events(type_names)
         if event == 'IN_IGNORED':
             continue
 
-        is_dir = False
-        if event == 'IN_ISDIR':
-            event = type_names[1]
-            is_dir = True
-
-        if event == 'IN_DELETE_SELF' or event == 'IN_DELETE' or event == 'IN_MOVED_FROM':
+        if event == 'IN_DELETE' or event == 'IN_DELETE_SELF' or event == 'IN_MOVED_FROM':
             # If delete operation
             delete_backlog[path] = {
                 'is_dir' : is_dir
@@ -45,11 +40,10 @@ def _main():
             # If most recent operation was deleting a file, don't bother updating
             if path in update_backlog:
                 update_backlog.pop(path)
-            
-            # Fix crashing issue...
-            #if event == 'IN_DELETE_SELF':
-            #    i.inotify.remove_watch(path)
-        else:
+
+            if event == 'IN_DELETE_SELF' or event == 'IN_MOVED_FROM':
+                i.inotify.remove_watch(path)
+     	else:
             update_backlog[path] = {
                 'is_dir' : is_dir
             }
@@ -63,6 +57,17 @@ def _main():
             process_deferred_updates(update_backlog, delete_backlog, zip_path)
             checkpoint = timestamp
             print ''
+
+def parse_events(type_names):
+    event = type_names[0]
+    is_dir = False
+    if len(type_names) > 1:
+        if type_names[1] == 'IN_ISDIR':
+            is_dir = True
+        elif event == 'IN_ISDIR':
+            event = type_names[1]
+            is_dir = True
+    return event, is_dir
 
 def process_deferred_updates(update_backlog, delete_backlog, zip_path):
     for path in update_backlog:

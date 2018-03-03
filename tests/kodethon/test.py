@@ -16,11 +16,16 @@ class Tester:
         self.delete_table = {}
         self.dir_list = [test_dir]
         self.file_list = []
-        self.total_tests = 0
         self.passed_tests = 0
+        self.char_set = string.ascii_lowercase + string.digits + '_-'
 
-    def is_finished(self):
-        return self.passed_tests == self.total_tests
+    def file_list_remove(self, path):
+        #print "Removing %s from file list..." % path
+        self.file_list.remove(path)
+
+    def dir_list_remove(self, path):
+        #print "Removing %s from dir list..." % path
+        self.dir_list.remove(path)
 
     def to_container_path(self, path):
         return path.replace(self.test_dir + '/', '', 1)
@@ -47,7 +52,7 @@ class Tester:
             self.delete_table.pop(path)
 
         self.passed_tests += len(deleted_paths)
-        print "Passed: %s - Pending: %s" % (self.passed_tests, self.total_tests - self.passed_tests)
+        print "Passed: %s - Pending: %s" % (self.passed_tests, len(self.delete_table.keys()) + len(self.update_table.keys()))
 
     def check_file_created(self, path, is_dir):
         ''' Check file exists in zip file '''
@@ -101,38 +106,36 @@ class Tester:
         f = file_list[index]
         file_list.pop(index)
         return f
+
+    def random_filename(self):
+        filename = []
+        for _ in range(randint(1, 50)):
+            filename += self.char_set[randint(0, len(self.char_set) - 1)] 
+        return ''.join(filename)
     
     def watch_update(self, path, is_dir):
-        print "Watching %s for update..." % path
+        print "Watching %s for UPDATE..." % path
         self.update_table[path] = {
             'timestamp' : 0,
             'is_dir' : is_dir
         }
-        self.total_tests += 1
         if path in self.delete_table:
             self.delete_table.pop(path)
-            self.total_tests -= 1
 
     def watch_delete(self, path, is_dir):
-        print "Watching %s for deletion..." % path
+        print "Watching %s for DELETE..." % path
         self.delete_table[path] = {
             'timestamp' : 0,
             'is_dir' : is_dir
         }
-        self.total_tests += 1
         if path in self.update_table:
             self.update_table.pop(path)
-            self.total_tests -= 1
 
     def create_test_case(self):
-        char_set = string.ascii_lowercase + string.digits + '_-'
 
         # Create a random dir path based on current structure
         path = self.pick_random_file(self.dir_list)
-        filename = []
-        for _ in range(randint(1, 50)):
-            filename += char_set[randint(0, len(char_set) - 1)] 
-        path = os.path.join(path, ''.join(filename))
+        path = os.path.join(path, self.random_filename())
 
         # Create the file or directory
         is_dir = randint(0, 1) == 0
@@ -148,14 +151,9 @@ class Tester:
         self.watch_update(path, is_dir) 
 
     def modify_test_case(self):
-        char_set = string.ascii_lowercase + string.digits + '_-'
-
         # Create a random dir path based on current structure
         path = self.pick_random_file(self.dir_list)
-        filename = []
-        for _ in range(randint(1, 50)):
-            filename += char_set[randint(0, len(char_set) - 1)] 
-        path = os.path.join(path, ''.join(filename))
+        path = os.path.join(path, self.random_filename())
 
         # If use existing, pick an existing file
         use_existing = randint(0, 1) == 0
@@ -180,7 +178,7 @@ class Tester:
         text = ''
         batch = ''
         for i in xrange(0, num_chars):
-            char = char_set[randint(0, len(char_set) - 1)] 
+            char = self.char_set[randint(0, len(self.char_set) - 1)] 
             batch += char
             if i % batch_size == 0 or i == num_chars - 1:
                 fp.write(batch) 
@@ -210,11 +208,11 @@ class Tester:
                 # Checked that children are also removed
                 for path in marked_files:
                     self.watch_delete(path, False)
-                    self.file_list.remove(path)
+                    self.file_list_remove(path)
 
                 for path in marked_dirs:
                     self.watch_delete(path, True)
-                    self.dir_list.remove(path)
+                    self.dir_list_remove(path)
 
                 self.watch_delete(path, is_dir)
         else:
@@ -226,12 +224,82 @@ class Tester:
                 os.remove(path)
                 self.watch_delete(path, is_dir)
 
+    def move_test_case(self):
+        is_dir = randint(0, 1) == 0
+        if is_dir:
+            src_path = self.pop_random_file(self.dir_list)
+            if src_path == self.test_dir:
+                print 'Root folder selected, continuing...\n'
+                self.dir_list.append(src_path)
+            else:
+                dest_path = self.pick_random_file(self.dir_list)
+                while src_path in dest_path: 
+                    dest_path = self.pick_random_file(self.dir_list)
+                dest_path = os.path.join(dest_path, self.random_filename())
+
+                # Create a random dir path based on current structure
+                print 'Moving folder %s to %s' % (src_path, dest_path)
+
+                marked_files = []
+                marked_dirs = []
+                for root, dirs, files in os.walk(src_path, topdown=False):
+                    for name in files:
+                        marked_files.append(os.path.join(root, name))
+                    for name in dirs:
+                        marked_dirs.append(os.path.join(root, name))
+
+                shutil.move(src_path, dest_path)
+                
+                # Checked that children are also removed
+                dest_files = []
+                dest_dirs = []
+                for path in marked_files:
+                    self.watch_delete(path, False)
+                    self.file_list_remove(path)
+                    dest_files.append(path.replace(src_path, dest_path))
+
+                for path in marked_dirs:
+                    self.watch_delete(path, True)
+                    self.dir_list_remove(path)
+                    dest_dirs.append(path.replace(src_path, dest_path))
+
+                self.watch_delete(src_path, is_dir)
+
+                # For each destination file, watch for it
+                for path in dest_files:
+                    self.watch_update(path, False)
+                    self.file_list.append(path)
+                
+                # For each destination direcotry, watch for it
+                for path in dest_dirs:
+                    self.watch_update(path, True)
+                    self.dir_list.append(path)
+
+                self.watch_update(dest_path, is_dir)
+                self.dir_list.append(dest_path)
+        else:
+            if len(self.file_list) == 0:
+                print 'No files to delete, continuing...'
+            else:
+                src_path = self.pop_random_file(self.file_list)
+                dest_path = self.pick_random_file(self.dir_list)
+                while src_path in dest_path:
+                    dest_path = self.pick_random_file(self.dir_list)
+                dest_path = os.path.join(dest_path, self.random_filename())
+                print 'Moving file %s to %s' % (src_path, dest_path)
+                shutil.move(src_path, dest_path)
+                self.watch_delete(src_path, is_dir)
+                self.watch_update(dest_path, is_dir)
+                self.file_list.append(dest_path)
+
 def main():
     if len(sys.argv) < 4:
         print "USAGE: python test.py <TEST_DIR> <ZIP_PATH> <ITERATIONS>" 
         sys.exit(1)
-
-    events = ['IN_MODIFY', 'IN_DELETE', 'IN_CREATE']
+    
+    # Add 2 create events to make that event more likely
+    #events = ['IN_CREATE', 'IN_CREATE', 'IN_MODIFY', 'IN_DELETE']
+    events = ['IN_CREATE', 'IN_MOVE']
 
     test_dir = sys.argv[1]
     zip_path = sys.argv[2]
@@ -249,13 +317,17 @@ def main():
             tester.delete_test_case()
         elif event == 'IN_MODIFY':       
             tester.modify_test_case()
+        elif event == 'IN_MOVE':
+            tester.move_test_case()
 
         time.sleep(1)
         tester.apply_check()
     
-    while not tester.is_finished():
-        tester.apply_check()
-        time.sleep(1)
+    # Flush the remaining events
+    time.sleep(5)
+    tester.create_test_case() 
+    time.sleep(1)
+    tester.apply_check()
 
 if __name__ == '__main__':
     main()
