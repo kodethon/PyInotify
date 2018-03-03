@@ -18,6 +18,7 @@ class Tester:
         self.file_list = []
         self.passed_tests = 0
         self.char_set = string.ascii_lowercase + string.digits + '_-'
+        self.random_file_count = 0
 
     def file_list_remove(self, path):
         #print "Removing %s from file list..." % path
@@ -107,11 +108,15 @@ class Tester:
         file_list.pop(index)
         return f
 
-    def random_filename(self):
+    def unique_filename(self):
+        '''
         filename = []
         for _ in range(randint(1, 50)):
             filename += self.char_set[randint(0, len(self.char_set) - 1)] 
         return ''.join(filename)
+        '''
+        self.random_file_count += 1
+        return str(self.random_file_count)
     
     def watch_update(self, path, is_dir):
         print "Watching %s for UPDATE..." % path
@@ -135,7 +140,7 @@ class Tester:
 
         # Create a random dir path based on current structure
         path = self.pick_random_file(self.dir_list)
-        path = os.path.join(path, self.random_filename())
+        path = os.path.join(path, self.unique_filename())
 
         # Create the file or directory
         is_dir = randint(0, 1) == 0
@@ -153,7 +158,7 @@ class Tester:
     def modify_test_case(self):
         # Create a random dir path based on current structure
         path = self.pick_random_file(self.dir_list)
-        path = os.path.join(path, self.random_filename())
+        path = os.path.join(path, self.unique_filename())
 
         # If use existing, pick an existing file
         use_existing = randint(0, 1) == 0
@@ -232,10 +237,11 @@ class Tester:
                 print 'Root folder selected, continuing...\n'
                 self.dir_list.append(src_path)
             else:
+                # Select a destination that is not subdirectory
                 dest_path = self.pick_random_file(self.dir_list)
                 while src_path in dest_path: 
                     dest_path = self.pick_random_file(self.dir_list)
-                dest_path = os.path.join(dest_path, self.random_filename())
+                dest_path = os.path.join(dest_path, self.unique_filename())
 
                 # Create a random dir path based on current structure
                 print 'Moving folder %s to %s' % (src_path, dest_path)
@@ -250,12 +256,17 @@ class Tester:
 
                 shutil.move(src_path, dest_path)
                 
-                # Checked that children are also removed
+                # e.g. Moving /1/2 -> /1/3 = /1/3/2
+                src_folder = os.path.basename(src_path)
+                dest_path = os.path.join(dest_path, src_folder)
                 dest_files = []
                 dest_dirs = []
+
+                # Check that children are also removed
                 for path in marked_files:
                     self.watch_delete(path, False)
                     self.file_list_remove(path)
+                    # Construct expected destination files
                     dest_files.append(path.replace(src_path, dest_path))
 
                 for path in marked_dirs:
@@ -270,7 +281,7 @@ class Tester:
                     self.watch_update(path, False)
                     self.file_list.append(path)
                 
-                # For each destination direcotry, watch for it
+                # For each destination directory, watch for it
                 for path in dest_dirs:
                     self.watch_update(path, True)
                     self.dir_list.append(path)
@@ -281,11 +292,24 @@ class Tester:
             if len(self.file_list) == 0:
                 print 'No files to delete, continuing...'
             else:
+                # 0 -> File to new file
+                # 1 -> File to replace file
+                # 2 -> File to folder
+                action = randint(0, 2)
                 src_path = self.pop_random_file(self.file_list)
-                dest_path = self.pick_random_file(self.dir_list)
-                while src_path in dest_path:
+                src_folder = os.path.basename(src_path)
+                
+                if action == 0:
                     dest_path = self.pick_random_file(self.dir_list)
-                dest_path = os.path.join(dest_path, self.random_filename())
+                    dest_path = os.path.join(dest_path, self.unique_filename())
+                elif action == 1:
+                    dest_path = self.pick_random_file(self.file_list)
+                elif action == 2:
+                    dest_path = self.pick_random_file(self.dir_list)
+                    while src_path in dest_path:
+                        dest_path = self.pick_random_file(self.dir_list)
+                    dest_path = os.path.join(dest_path, self.unique_filename())
+
                 print 'Moving file %s to %s' % (src_path, dest_path)
                 shutil.move(src_path, dest_path)
                 self.watch_delete(src_path, is_dir)

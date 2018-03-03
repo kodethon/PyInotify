@@ -41,7 +41,7 @@ def _main():
             if path in update_backlog:
                 update_backlog.pop(path)
 
-            if event == 'IN_DELETE_SELF' or event == 'IN_MOVED_FROM':
+            if is_dir and (event == 'IN_DELETE_SELF' or event == 'IN_MOVED_FROM'):
                 i.inotify.remove_watch(path)
      	else:
             update_backlog[path] = {
