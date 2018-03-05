@@ -54,7 +54,7 @@ class Tester:
             self.delete_table.pop(path)
 
         self.passed_tests += len(deleted_paths)
-        logging.info("Passed: %s - Pending: %s" % (self.passed_tests, len(self.delete_table.keys()) + len(self.update_table.keys())))
+        logging.info("Passed: %s - Pending: %s\n" % (self.passed_tests, len(self.delete_table.keys()) + len(self.update_table.keys())))
 
     def check_file_created(self, path, is_dir):
         ''' Check file exists in zip file '''
@@ -352,8 +352,6 @@ def main():
     tester = Tester(test_dir, zip_path)
 
     for i in xrange(0, iterations):
-        print ''
-
         # Pick an event and set it up
         event = events[randint(0, len(events) - 1)]
         if event == 'IN_CREATE':
@@ -375,4 +373,5 @@ def main():
     tester.apply_check()
 
 if __name__ == '__main__':
+    logging.basicConfig(filename='tmp/test.log',level=logging.DEBUG,  format="%(levelname)s - %(message)s")
     main()
