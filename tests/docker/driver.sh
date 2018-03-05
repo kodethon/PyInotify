@@ -3,7 +3,7 @@ container_zip_path=/tmp/test.zip
 host_zip_path=tmp/test.zip
 test_container_name=test-inotify
 
-mkdir $test_dir 
+mkdir $test_dir 2> /dev/null
 rm -rf $test_dir/*
 sudo rm $host_zip_path
 
@@ -14,4 +14,5 @@ docker run --name $test_container_name -itd \
 $container_zip_path
 
 sleep 5 # Wait for initialization
-python test.py $test_dir $host_zip_path 100
+python test.py $test_dir $host_zip_path 100 > tmp/test.log
+docker logs test-inotify  --tail 100 > tmp/docker.log
