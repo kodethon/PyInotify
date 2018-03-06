@@ -22,12 +22,29 @@ class Tester:
         self.random_file_count = 0
 
     def file_list_remove(self, path):
-        logging.debug("Removing %s from file list..." % path)
-        self.file_list.remove(path)
+        try:
+            logging.debug("Removing %s from file list..." % path)
+            self.file_list.remove(path)
+        except ValueError as e:
+            logging.warning("Expected %s to be in file list, continuing..." % path)
+            pass
 
     def dir_list_remove(self, path):
-        logging.debug("Removing %s from dir list..." % path)
-        self.dir_list.remove(path)
+        try:
+            logging.debug("Removing %s from dir list..." % path)
+            logging.info(self.dir_list)
+            self.dir_list.remove(path)
+        except ValueError as e:
+            logging.warning("Expected %s to be in dir list, continuing..." % path)
+            pass
+
+    def dir_list_add(self, path):
+        if not path in self.dir_list:
+            self.dir_list.append(path)
+
+    def file_list_add(self, path):
+        if not path in self.file_list:
+            self.file_list.append(path)
 
     def to_container_path(self, path):
         return path.replace(self.test_dir + '/', '', 1)
@@ -113,18 +130,19 @@ class Tester:
         return file_list[randint(0, len(file_list) - 1)]
 
     def pop_random_file(self, file_list):
+        logging.debug(file_list)
         index = randint(0, len(file_list) - 1)
         return file_list.pop(index)
 
-    def unique_filename(self):
-        '''
-        filename = []
-        for _ in range(randint(1, 50)):
-            filename += self.char_set[randint(0, len(self.char_set) - 1)] 
-        return ''.join(filename)
-        '''
-        self.random_file_count += 1
-        return str(self.random_file_count)
+    def unique_filename(self, method = 'count'):
+        if method == 'count':
+            self.random_file_count += 1
+            return str(self.random_file_count)
+        else:
+            filename = []
+            for _ in range(randint(1, 50)):
+                filename += self.char_set[randint(0, len(self.char_set) - 1)] 
+            return ''.join(filename)
     
     def watch_update(self, path, is_dir):
         logging.info("Watching %s for UPDATE..." % path)
@@ -154,12 +172,12 @@ class Tester:
         is_dir = randint(0, 1) == 0
         if is_dir:
             logging.info('Creating folder: %s' % path)
-            self.dir_list.append(path)
+            self.dir_list_add(path)
             os.mkdir(path)
         else:
             logging.info('Creating file: %s' % path)
             fp = open(path, 'a')
-            self.file_list.append(path)
+            self.file_list_add(path)
         
         self.watch_update(path, is_dir) 
 
@@ -171,7 +189,7 @@ class Tester:
         # If use existing, pick an existing file
         use_existing = randint(0, 1) == 0
         if not use_existing:
-            self.file_list.append(path)
+            self.file_list_add(path)
         else:
             if len(self.file_list) == 0:
                 logging.info('No files to modify, continuing...')
@@ -206,9 +224,9 @@ class Tester:
             path = self.pop_random_file(self.dir_list)
             if path == self.test_dir:
                 logging.warning('Root folder selected, continuing...\n')
-                self.dir_list.append(path)
+                self.dir_list_add(path)
             else:
-                logging.warning('Deleting folder: %s' % path)
+                logging.info('Deleting folder: %s' % path)
                 marked_files = []
                 marked_dirs = []
                 for root, dirs, files in os.walk(path, topdown=False):
@@ -243,7 +261,7 @@ class Tester:
             src_path = self.pop_random_file(self.dir_list)
             if src_path == self.test_dir:
                 logging.warning('Root folder selected, continuing...\n')
-                self.dir_list.append(src_path)
+                self.dir_list_add(src_path)
                 return
 
             # Select a destination that is not subdirectory
@@ -292,15 +310,15 @@ class Tester:
             # For each destination file, watch for it
             for path in dest_files:
                 self.watch_update(path, False)
-                self.file_list.append(path)
+                self.file_list_add(path)
             
             # For each destination directory, watch for it
             for path in dest_dirs:
                 self.watch_update(path, True)
-                self.dir_list.append(path)
+                self.dir_list_add(path)
 
             self.watch_update(dest_path, is_dir)
-            self.dir_list.append(dest_path)
+            self.dir_list_add(dest_path)
         else:
             if len(self.file_list) == 0:
                 logging.warning('No files to delete, continuing...')
@@ -335,16 +353,16 @@ class Tester:
 
             self.watch_delete(src_path, is_dir)
             self.watch_update(dest_path, is_dir)
-            self.file_list.append(dest_path)
+            self.file_list_add(dest_path)
 
 def main():
     if len(sys.argv) < 4:
         print "USAGE: python test.py <TEST_DIR> <ZIP_PATH> <ITERATIONS>" 
         sys.exit(1)
     
-    # Add 2 create events to make that event more likely
-    #events = ['IN_CREATE', 'IN_CREATE', 'IN_MODIFY', 'IN_DELETE']
-    events = ['IN_CREATE', 'IN_MOVE']
+    # Add more of an event to make that event more likely
+    events = ['IN_CREATE', 'IN_CREATE', 'IN_MODIFY', 'IN_DELETE', 'IN_MOVE']
+    #events = ['IN_CREATE', 'IN_MOVE']
 
     test_dir = sys.argv[1]
     zip_path = sys.argv[2]

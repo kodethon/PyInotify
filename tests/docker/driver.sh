@@ -1,8 +1,10 @@
 test_dir=home
+tmp_dir=tmp
 container_zip_path=/tmp/test.zip
 host_zip_path=tmp/test.zip
 test_container_name=test-inotify
 
+mkdir $tmp_dir 2> /dev/null
 mkdir $test_dir 2> /dev/null
 rm -rf $test_dir/*
 sudo rm $host_zip_path
