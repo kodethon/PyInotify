@@ -17,5 +17,5 @@ $container_zip_path
 
 sleep 5 # Wait for initialization
 echo 'Starting the test...'
-python test.py $test_dir $host_zip_path 100
+python test.py $test_dir $host_zip_path 1000
 docker logs test-inotify  --tail 100 > tmp/docker.log

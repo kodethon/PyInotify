@@ -227,6 +227,8 @@ class Tester:
                 self.dir_list_add(path)
             else:
                 logging.info('Deleting folder: %s' % path)
+                self.watch_delete(path, is_dir)
+
                 marked_files = []
                 marked_dirs = []
                 for root, dirs, files in os.walk(path, topdown=False):
@@ -234,6 +236,8 @@ class Tester:
                         marked_files.append(os.path.join(root, name))
                     for name in dirs:
                         marked_dirs.append(os.path.join(root, name))
+                
+                # Actually delete the file
                 shutil.rmtree(path)
                 
                 # Checked that children are also removed
@@ -244,8 +248,6 @@ class Tester:
                 for path in marked_dirs:
                     self.watch_delete(path, True)
                     self.dir_list_remove(path)
-
-                self.watch_delete(path, is_dir)
         else:
             if len(self.file_list) == 0:
                 logging.warning('No files to delete, continuing...')

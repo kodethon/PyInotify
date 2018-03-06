@@ -67,10 +67,10 @@ class Backlog:
         
         # Add child files to delete back log
         if is_dir:
-            print "Marking %s for deletion" % self.dir_table[path]
-            children = self.__delete_table_recurse(path)
-            for child in children:
-                self.delete_backlog[child.path] = child
+            print "Marking folder %s for deletion" % self.dir_table[path]
+            #children = self.__delete_table_recurse(path)
+            #for child in children:
+            #    self.delete_backlog[child.path] = child
         else:
             # If there are multiple files in directory, parent may be deleted already
             if f.parent in self.dir_table:
@@ -97,7 +97,7 @@ class Backlog:
             sys.exit()
 
     def delete_zip(self, path, is_dir):
-        path = path + '/' if is_dir else path
+        path = path + '/*' if is_dir else path
         delete_args = ['zip', '-d', self.zip_path, path]
         #print delete_args
         child = subprocess.Popen(delete_args)
