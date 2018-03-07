@@ -134,7 +134,7 @@ class Tester:
         index = randint(0, len(file_list) - 1)
         return file_list.pop(index)
 
-    def unique_filename(self, method = 'count'):
+    def unique_filename(self, method = ''):
         if method == 'count':
             self.random_file_count += 1
             return str(self.random_file_count)
