@@ -46,7 +46,7 @@ class Backlog:
             self.update_backlog.pop(path)
 
     def sync_zip(self):
-        update_args = ['zip', '--symlink', 'FSr', self.zip_path, '.']
+        update_args = ['zip', '--symlink', '-FSr', self.zip_path, '.']
         process = subprocess.Popen(update_args)
 
     def update_zip(self, path):
@@ -87,14 +87,22 @@ def _main():
     if len(sys.argv) != 2:
         print 'Expecting argument one to be an absolute path to the storage archive.'
         sys.exit(1)
-    
+
     zip_path = sys.argv[1]
+
+    # Keep track of what events need to be processed
+    backlog = Backlog(zip_path)
+    
     if not os.path.exists(zip_path):
         print "Creating %s..." % sys.argv[1] 
         process = subprocess.Popen(['zip', zip_path, '.', '-i', '.'])
-    
-    backlog = Backlog(zip_path)
-    checkpoint = time.time()
+    else:
+        # Sync directory with zip
+        backlog.sync_zip()
+
+    checkpoint = time.time() # Last time zip was updated
+
+    # Iterate through events as they are received
     for event in i.event_gen(yield_nones=False):
         timestamp = time.time()
         (_, type_names, dir_path, filename) = event
@@ -106,14 +114,13 @@ def _main():
             continue
 
         if event == 'IN_DELETE' or event == 'IN_DELETE_SELF' or event == 'IN_MOVED_FROM':
+            # Handle delete
             backlog.add_delete(path, is_dir)
-            
-            #jif is_dir:
-             #   recurse_add_delete(path, delete_backlog)
 
             #if is_dir and (event == 'IN_DELETE_SELF' or event == 'IN_MOVED_FROM'):
             #    i.inotify.remove_watch(path)
      	else:
+     	    # Handle updates
             backlog.add_update(path, is_dir) 
             
             if os.path.isdir(path):
