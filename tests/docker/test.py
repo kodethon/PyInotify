@@ -32,7 +32,6 @@ class Tester:
     def dir_list_remove(self, path):
         try:
             logging.debug("Removing %s from dir list..." % path)
-            logging.info(self.dir_list)
             self.dir_list.remove(path)
         except ValueError as e:
             logging.warning("Expected %s to be in dir list, continuing..." % path)
@@ -86,7 +85,7 @@ class Tester:
             self.update_table[path]['timestamp'] += 1
             timestamp = self.update_table[path]['timestamp']
             logging.debug("%s is missing for %s cycles(s)." % (path, timestamp))
-            if timestamp > 5:
+            if timestamp > 6:
                 sys.exit()
 
     def check_file_deleted(self, path, is_dir):
@@ -99,7 +98,7 @@ class Tester:
             self.delete_table[path]['timestamp'] += 1
             timestamp = self.delete_table[path]['timestamp']
             logging.debug("%s has existed for %s cycle(s)." % (path, timestamp))
-            if timestamp > 5:
+            if timestamp > 6:
                 sys.exit()
         except ValueError:
             logging.debug("%s has been deleted after %s cycle(s)." % (path, self.delete_table[path]['timestamp']))
@@ -130,11 +129,10 @@ class Tester:
         return file_list[randint(0, len(file_list) - 1)]
 
     def pop_random_file(self, file_list):
-        logging.debug(file_list)
         index = randint(0, len(file_list) - 1)
         return file_list.pop(index)
 
-    def unique_filename(self, method = ''):
+    def unique_filename(self, method = 'count'):
         if method == 'count':
             self.random_file_count += 1
             return str(self.random_file_count)
