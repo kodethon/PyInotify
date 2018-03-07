@@ -50,7 +50,7 @@ class Backlog:
         process = subprocess.Popen(update_args)
 
     def update_zip(self, path):
-        update_args = ['zip', '--symlink', '-r', self.zip_path, path]
+        update_args = ['zip', '--symlink', '-ru', self.zip_path, path]
         child = subprocess.Popen(update_args)
         child.communicate()[0]
         returncode = child.returncode
@@ -96,9 +96,9 @@ def _main():
     if not os.path.exists(zip_path):
         print "Creating %s..." % sys.argv[1] 
         process = subprocess.Popen(['zip', zip_path, '.', '-i', '.'])
-    else:
-        # Sync directory with zip
-        backlog.sync_zip()
+
+    # Sync directory with zip
+    backlog.sync_zip()
 
     checkpoint = time.time() # Last time zip was updated
 
@@ -141,5 +141,5 @@ def _main():
             checkpoint = timestamp
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG,  format="%(levelname)s - %(message)s")
+    logging.basicConfig(level=logging.INFO,  format="%(levelname)s - %(message)s")
     _main()
