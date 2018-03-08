@@ -107,23 +107,21 @@ class ZipBacklog(Backlog):
 
 class LazyZipBacklog(ZipBacklog):
     def __init__(self, archive_path):
-        super(DelayedZipBacklog, self).__init__(archive_path, 1)
-        self.process_request_count = 0
+        super(LazyZipBacklog, self).__init__(archive_path, 1)
+        self.last_process = time.time()
 
     def process(self):
-        self.process_request_count += 1
-        
-        # If request threshold has been met or queued event count is met
-        if self.process_request_count < 60 and self.event_count < 30:
-            logging.debug("Request count: %s - Event count: %s" % (self.process_request_count, self.event_count))
+        timestamp = time.time()
+        if timestamp - self.last_process < 60 and self.event_count < 30:
+            logging.debug("Event count: %s" % self.event_count)
         else:
-            logging.info("Syncing files to %s" % archive_path)
+            logging.info("Syncing files to %s" % self.archive_path)
+
             self.sync()
             self.create_dirty_flag()
             
-            # Reset counters
             self.event_count = 0
-            self.process_request_count = 0
+            self.last_process = timestamp
 
         self.update_backlog.clear()
         self.delete_backlog.clear()   
@@ -152,7 +150,7 @@ def _main():
     i = inotify.adapters.InotifyTree('.', mask = mask)
 
     archive_path = sys.argv[1]
-    backlog = ZipBacklog(archive_path) 
+    backlog = LazyZipBacklog(archive_path) 
 
     # Iterate through events as they are received
     checkpoint = time.time() # Last time zip was updated
@@ -160,7 +158,7 @@ def _main():
         timestamp = time.time()
         (_, type_names, dir_path, filename) = event
         path = os.path.join(dir_path, filename)
-        logging.info("{} -> {}".format(type_names, path))
+        logging.debug("{} -> {}".format(type_names, path))
         
         event, is_dir = PyInotifyFacade.parse_events(type_names)
         if event == 'IN_IGNORED':
