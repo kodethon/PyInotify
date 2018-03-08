@@ -11,4 +11,5 @@ WORKDIR /home/kodethon
 
 ENTRYPOINT ["python", "/sbin/PyInotify/entrypoint.py"] 
 
-RUN cd /sbin && git clone https://github.com/kodethon/PyInotify.git
+#RUN cd /sbin && git clone https://github.com/kodethon/PyInotify.git
+ADD . /sbin/PyInotify
