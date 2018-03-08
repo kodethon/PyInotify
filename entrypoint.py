@@ -64,13 +64,21 @@ class ZipBacklog(Backlog):
 
         self.sync() # Sync directory with zip
 
+    def create_dirty_flag(self):
+        # Create file denoting changes have been made
+        archive_dir = os.path.dirname(self.archive_path)
+        dirty_flag = os.path.join(archive_dir, '__DIRTY__')
+        if not os.path.exists(dirty_flag):
+            open(dirty_flag, 'a').close()
+
     def process(self):
         for path in self.update_backlog:
             self.update(path, self.update_backlog[path].is_dir) 
 
         for path in self.delete_backlog:
             self.delete(path, self.delete_backlog[path].is_dir) 
-
+        
+        self.create_dirty_flag()
         self.update_backlog.clear()
         self.delete_backlog.clear()
 
@@ -105,9 +113,17 @@ class LazyZipBacklog(ZipBacklog):
     def process(self):
         self.process_request_count += 1
         
-        if self.process_request_count > 60 or self.event_count > 30:
+        # If request threshold has been met or queued event count is met
+        if self.process_request_count < 60 and self.event_count < 30:
+            logging.debug("Request count: %s - Event count: %s" % (self.process_request_count, self.event_count))
+        else:
+            logging.info("Syncing files to %s" % archive_path)
             self.sync()
+            self.create_dirty_flag()
+            
+            # Reset counters
             self.event_count = 0
+            self.process_request_count = 0
 
         self.update_backlog.clear()
         self.delete_backlog.clear()   
