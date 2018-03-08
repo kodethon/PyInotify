@@ -112,7 +112,10 @@ class LazyZipBacklog(ZipBacklog):
 
     def process(self):
         timestamp = time.time()
-        if timestamp - self.last_process < 60 and self.event_count < 30:
+
+        time_threshold = timestamp - self.last_process > 60 and self.event_count > 5
+        event_threshold = self.event_count > 30
+        if not time_threshold and not event_threshold:
             logging.debug("Event count: %s" % self.event_count)
         else:
             logging.info("Syncing files to %s" % self.archive_path)
