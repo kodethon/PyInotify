@@ -61,6 +61,7 @@ class ZipBacklog(Backlog):
         if not os.path.exists(archive_path):
             print "Creating %s..." % archive_path
             process = subprocess.Popen(['zip', archive_path, '.', '-i', '.'])
+            self.create_dirty_flag()
 
         self.sync() # Sync directory with zip
 
@@ -72,13 +73,18 @@ class ZipBacklog(Backlog):
             open(dirty_flag, 'a').close()
 
     def process(self):
+        count = 0
         for path in self.update_backlog:
             self.update(path, self.update_backlog[path].is_dir) 
+            count += 1
 
         for path in self.delete_backlog:
             self.delete(path, self.delete_backlog[path].is_dir) 
+            count += 1
         
-        self.create_dirty_flag()
+        if count > 0:
+            self.create_dirty_flag()
+
         self.update_backlog.clear()
         self.delete_backlog.clear()
 
@@ -105,29 +111,60 @@ class ZipBacklog(Backlog):
             logging.error("Zip returned a non-success error code: %s" % returncode)
             sys.exit()
 
+    def watch(self, i, mask):
+        print 'here'
+        # Iterate through events as they are received
+        checkpoint = time.time() # Last time zip was updated
+        for event in i.event_gen(yield_nones=False):
+            timestamp = time.time()
+            (_, type_names, dir_path, filename) = event
+
+            path = os.path.join(dir_path, filename)
+            logging.debug("{} -> {}".format(type_names, path))
+            
+            event, is_dir = PyInotifyFacade.parse_events(type_names)
+            if event == 'IN_IGNORED':
+                continue
+
+            if event == 'IN_DELETE' or event == 'IN_DELETE_SELF' or event == 'IN_MOVED_FROM':
+                # Handle delete
+                self.add_delete(path, is_dir)
+            else:
+                # Handle updates
+                self.add_update(path, is_dir) 
+                
+                if os.path.isdir(path):
+                    for root, dirs, files in os.walk(path, topdown=True):
+                        for name in dirs:
+                            path = os.path.join(root, name)
+                            self.add_update(path, True)
+
+                            # See race condition in docs to see why this is necessary
+                            i.inotify.add_watch(path, mask)
+                        for name in files:
+                            path = os.path.join(root, name)
+                            self.add_update(path, False)
+            
+            if timestamp - checkpoint > self.process_interval:
+                logging.debug('Processing backlog...')
+                self.process()
+                checkpoint = timestamp
+
 class LazyZipBacklog(ZipBacklog):
     def __init__(self, archive_path):
         super(LazyZipBacklog, self).__init__(archive_path, 1)
-        self.last_process = time.time()
 
     def process(self):
-        timestamp = time.time()
+        logging.info("Syncing files to %s" % self.archive_path)
 
-        time_threshold = timestamp - self.last_process > 60 and self.event_count > 5
-        event_threshold = self.event_count > 30
-        if not time_threshold and not event_threshold:
-            logging.debug("Event count: %s" % self.event_count)
-        else:
-            logging.info("Syncing files to %s" % self.archive_path)
-
-            self.sync()
-            self.create_dirty_flag()
-            
-            self.event_count = 0
-            self.last_process = timestamp
-
-        self.update_backlog.clear()
-        self.delete_backlog.clear()   
+        self.sync()
+        self.create_dirty_flag()
+        
+    def watch(self, i, mask):
+        while True:
+            events = i.event_gen(yield_nones=False, timeout_s=60)
+            if len(list(events)) > 0:
+                self.process()
 
 class PyInotifyFacade:
     
@@ -154,42 +191,7 @@ def _main():
 
     archive_path = sys.argv[1]
     backlog = LazyZipBacklog(archive_path) 
-
-    # Iterate through events as they are received
-    checkpoint = time.time() # Last time zip was updated
-    for event in i.event_gen(yield_nones=False):
-        timestamp = time.time()
-        (_, type_names, dir_path, filename) = event
-        path = os.path.join(dir_path, filename)
-        logging.debug("{} -> {}".format(type_names, path))
-        
-        event, is_dir = PyInotifyFacade.parse_events(type_names)
-        if event == 'IN_IGNORED':
-            continue
-
-        if event == 'IN_DELETE' or event == 'IN_DELETE_SELF' or event == 'IN_MOVED_FROM':
-            # Handle delete
-            backlog.add_delete(path, is_dir)
-     	else:
-     	    # Handle updates
-            backlog.add_update(path, is_dir) 
-            
-            if os.path.isdir(path):
-                for root, dirs, files in os.walk(path, topdown=True):
-                    for name in dirs:
-                        path = os.path.join(root, name)
-                        backlog.add_update(path, True)
-
-                        # See race condition in docs to see why this is necessary
-                        i.inotify.add_watch(path, mask)
-                    for name in files:
-                        path = os.path.join(root, name)
-                        backlog.add_update(path, False)
-        
-        if timestamp - checkpoint > backlog.process_interval:
-            logging.debug('Processing backlog...')
-            backlog.process()
-            checkpoint = timestamp
+    backlog.watch(i, mask)
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO,  format="%(levelname)s - %(message)s")
